@@ -233,7 +233,21 @@
       if (rem) rem.checked = true;
     }
   }
+  function isClientMode() {
+    try {
+      if (location.hash === "#client" || /[?&]mode=client/.test(location.search)) return true;
+      if (sessionStorage.getItem("elite_mode") === "client") return true;
+    } catch (e) {}
+    return false;
+  }
   function boot() {
+    if (isClientMode()) {
+      document.body.classList.add("client-mode");
+      document.body.classList.remove("coach-locked", "coach-unlocked");
+      var g = document.getElementById("coach-gate");
+      if (g) g.style.display = "none";
+      return;
+    }
     prefill();
     if (unlocked()) {
       unlock();
@@ -392,9 +406,14 @@ Error generating stack: `+o.message+`
   }
   #save-toolbar button {
     display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: none; cursor: pointer;
-    font-family: inherit; font-size: 12px; font-weight: 700; padding: 11px 16px;
-    border-radius: 12px; color: #fff; flex: 1; min-width: 72px;
+    font-family: inherit; font-size: 11px; font-weight: 700; padding: 10px 8px;
+    border-radius: 12px; color: #fff;
+    flex: 1 1 calc(25% - 8px); min-width: 0; height: 48px;
+    box-sizing: border-box; text-align: center; line-height: 1.25;
     transition: transform .12s, opacity .15s;
+  }
+  #save-toolbar #btn-logout {
+    flex: 1 1 100%; width: 100%; height: 42px; font-size: 12px;
   }
   #save-toolbar button:active { transform: scale(0.97); }
   #save-toolbar .btn-pdf { background: linear-gradient(135deg, #c41212, #a50f0f); box-shadow: 0 6px 18px rgba(196,18,18,0.3); }
@@ -468,18 +487,19 @@ Error generating stack: `+o.message+`
     </div>
   </div>
   <div id="save-toolbar">
-    <button type="button" class="btn-pdf" id="btn-save-pdf">PDF</button>
-    <button type="button" class="btn-img" id="btn-save-img">Image</button>
-    <button type="button" class="btn-html" id="btn-save-html">HTML Client</button>
-    <button type="button" class="btn-print" id="btn-print">Print</button>
+    <button type="button" class="btn-html" id="btn-save-html" style="background:linear-gradient(135deg,#c41212,#8b0e0e);">+ Add Client</button>
+    <button type="button" class="btn-html" id="btn-subs-active" style="background:#1a1a1a;border:1px solid rgba(74,222,128,0.35);color:#4ade80;">Active Subs</button>
+    <button type="button" class="btn-html" id="btn-subs-expired" style="background:#1a1a1a;border:1px solid rgba(255,107,107,0.35);color:#ff8a8a;">Expired</button>
+    <button type="button" class="btn-html" id="btn-client-portal" style="background:#1a1a1a;border:1px solid rgba(212,175,55,0.4);color:#d4af37;">Client Page</button>
+    <button type="button" class="btn-html" id="btn-logout" style="background:#111;border:1px solid rgba(255,255,255,0.12);color:rgba(255,255,255,0.65);">Logout</button>
   </div>
 </div>
 <div class="save-toast" id="save-toast"></div>
 
 <div id="export-modal" class="no-print">
   <div class="box">
-    <h3>Client Access Setup</h3>
-    <p class="sub">Phone = username. Set password + monthly plan. After expiry, client needs your approval code to renew.</p>
+    <h3>Add Client to Website</h3>
+    <p class="sub">Client opens your site → Client Page → logs in with phone + password. No HTML file needed.</p>
     <label>Client Phone (Username)</label>
     <input id="ex-phone" type="tel" placeholder="01xxxxxxxxx" inputmode="tel" />
     <label>Client Photo (Avatar)</label>
@@ -508,9 +528,126 @@ Error generating stack: `+o.message+`
     <input id="ex-renew" type="text" placeholder="e.g. APPROVE4821" />
     <div class="actions">
       <button type="button" class="btn-cancel" id="ex-cancel">Cancel</button>
-      <button type="button" class="btn-go" id="ex-go">Export Locked HTML</button>
+      <button type="button" class="btn-go" id="ex-go">Save to Website</button>
     </div>
   </div>
+</div>
+
+<!-- CLIENT PORTAL GATE -->
+<style id="client-portal-css">
+  #client-portal-gate {
+    display: none; position: fixed; inset: 0; z-index: 999998;
+    align-items: center; justify-content: center; padding: 20px;
+    font-family: 'Montserrat', 'Cairo', system-ui, sans-serif;
+    background: #050505;
+    background-image:
+      radial-gradient(ellipse 80% 50% at 15% -10%, rgba(196,18,18,0.28), transparent 55%),
+      radial-gradient(ellipse 60% 40% at 95% 110%, rgba(212,175,55,0.12), transparent 50%);
+  }
+  body.client-mode #client-portal-gate { display: flex; }
+  body.client-mode #coach-gate { display: none !important; }
+  body.client-mode.client-unlocked #client-portal-gate { display: none !important; }
+  body.client-mode.client-unlocked #coach-dock,
+  body.client-mode.client-unlocked #save-toolbar { display: none !important; }
+  body.client-mode:not(.client-unlocked) #root {
+    visibility: hidden !important; pointer-events: none !important;
+  }
+  #client-portal-gate .cp-card {
+    position: relative; width: 100%; max-width: 400px; padding: 34px 28px 28px;
+    background: linear-gradient(165deg, rgba(24,24,24,0.96), rgba(8,8,8,0.98));
+    border: 1px solid rgba(212,175,55,0.25); border-radius: 26px;
+    box-shadow: 0 40px 100px rgba(0,0,0,0.9), inset 0 1px 0 rgba(255,255,255,0.06);
+    color: #fff; overflow: hidden; text-align: center;
+  }
+  #client-portal-gate .cp-card::before {
+    content: ""; position: absolute; top: 0; left: 18%; right: 18%; height: 1px;
+    background: linear-gradient(90deg, transparent, #d4af37, transparent);
+  }
+  #client-portal-gate .cp-brand {
+    display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 20px;
+  }
+  #client-portal-gate .cp-dot {
+    width: 9px; height: 9px; border-radius: 50%; background: #c41212;
+    box-shadow: 0 0 14px rgba(196,18,18,0.8);
+  }
+  #client-portal-gate .cp-brand span {
+    font-size: 10px; letter-spacing: 0.3em; font-weight: 700; color: rgba(255,255,255,0.5);
+  }
+  #client-portal-gate .cp-brand b { color: #d4af37; font-weight: 800; }
+  #client-portal-gate h1 {
+    margin: 0 0 8px; font-size: 26px; font-weight: 800; letter-spacing: 0.02em;
+  }
+  #client-portal-gate h1 em { font-style: normal; color: #d4af37; }
+  #client-portal-gate .cp-sub {
+    margin: 0 0 22px; font-size: 12.5px; color: rgba(255,255,255,0.4); line-height: 1.65;
+  }
+  #client-portal-gate label {
+    display: block; text-align: left; font-size: 9px; letter-spacing: 0.22em;
+    color: rgba(212,175,55,0.75); margin-bottom: 8px; text-transform: uppercase; font-weight: 700;
+  }
+  #client-portal-gate .cp-field { margin-bottom: 14px; text-align: left; }
+  #client-portal-gate input {
+    width: 100%; box-sizing: border-box; background: rgba(0,0,0,0.5);
+    border: 1px solid rgba(255,255,255,0.08); border-radius: 14px;
+    padding: 15px 16px; color: #fff; font-size: 16px; outline: none; font-family: inherit;
+  }
+  #client-portal-gate input:focus {
+    border-color: rgba(196,18,18,0.55); box-shadow: 0 0 0 3px rgba(196,18,18,0.14);
+  }
+  #client-portal-gate .cp-err {
+    color: #ff6b6b; font-size: 12px; min-height: 18px; margin: 0 0 10px; text-align: left;
+  }
+  #client-portal-gate .cp-btn {
+    width: 100%; border: none; border-radius: 14px; padding: 16px;
+    font-weight: 800; font-size: 12px; letter-spacing: 0.16em; text-transform: uppercase;
+    cursor: pointer; color: #fff; font-family: inherit;
+    background: linear-gradient(135deg, #c41212, #8b0e0e);
+    box-shadow: 0 12px 32px rgba(196,18,18,0.4);
+  }
+  #client-portal-gate .cp-foot {
+    margin-top: 20px; font-size: 9px; letter-spacing: 0.2em;
+    color: rgba(255,255,255,0.18); text-transform: uppercase;
+  }
+  #client-portal-gate .cp-link {
+    margin-top: 14px; font-size: 11px; color: rgba(255,255,255,0.35);
+  }
+  #client-portal-gate .cp-link a { color: #d4af37; text-decoration: none; }
+  #client-sub-bar {
+    display: none; position: sticky; top: 0; z-index: 50;
+    background: rgba(10,10,10,0.94); backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(212,175,55,0.12);
+    padding: 10px 16px; justify-content: space-between; align-items: center;
+    font-family: 'Montserrat', system-ui, sans-serif; font-size: 11px; color: rgba(255,255,255,0.5);
+  }
+  body.client-mode.client-unlocked #client-sub-bar { display: flex; }
+  #client-sub-bar .ok { color: #d4af37; font-weight: 700; }
+  #client-sub-bar .bad { color: #ff6b6b; font-weight: 700; }
+</style>
+<div id="client-portal-gate">
+  <div class="cp-card">
+    <div class="cp-brand">
+      <span class="cp-dot"></span>
+      <span>ELITE <b>CLIENT</b></span>
+    </div>
+    <h1>Welcome to<br><em>Your Plan</em></h1>
+    <p class="cp-sub">Private member access. Enter your phone and password to open your training plan.</p>
+    <div class="cp-field">
+      <label>Phone Number</label>
+      <input id="cp-phone" type="tel" inputmode="tel" autocomplete="username" placeholder="01xxxxxxxxx" />
+    </div>
+    <div class="cp-field">
+      <label>Password</label>
+      <input id="cp-pass" type="password" autocomplete="current-password" placeholder="••••••••" />
+    </div>
+    <div class="cp-err" id="cp-err"></div>
+    <button type="button" class="cp-btn" id="cp-login">Unlock Access</button>
+    <div class="cp-foot">Secure Member Area</div>
+    <div class="cp-link">Coach? <a href="#" id="cp-to-coach">Open coach login</a></div>
+  </div>
+</div>
+<div id="client-sub-bar" class="no-print">
+  <span id="cp-bar-left">Client</span>
+  <span id="cp-bar-right" class="ok">—</span>
 </div>
 
 <!-- ========== SUBSCRIBERS MANAGER ========== -->
@@ -721,10 +858,19 @@ Error generating stack: `+o.message+`
   }
 
   function setBusy(b) {
-    ["btn-save-pdf", "btn-save-img", "btn-save-html", "btn-print"].forEach(function (id) {
+    ["btn-save-html", "btn-subs-active", "btn-subs-expired", "btn-client-portal", "btn-logout"].forEach(function (id) {
       var x = document.getElementById(id);
       if (x) x.disabled = !!b;
     });
+  }
+
+  function coachLogout() {
+    try {
+      sessionStorage.removeItem("elite_coach_auth_v1");
+      localStorage.removeItem("elite_coach_remember_v1");
+    } catch (e) {}
+    location.hash = "";
+    location.reload();
   }
 
   function downloadBlob(blob, name) {
@@ -895,18 +1041,62 @@ Error generating stack: `+o.message+`
   }
 
   function saveAsHtmlLocked() {
+    // NEW: Save client to website portal (no HTML file download)
     var phone = (document.getElementById("ex-phone").value || "").replace(/\s+/g, "").trim();
     var pass = (document.getElementById("ex-pass").value || "").trim();
     var renew = (document.getElementById("ex-renew").value || "").trim();
     var expiry = computeExpiry();
     var photoPreview = document.getElementById("ex-photo-preview");
     var photoData = (photoPreview && photoPreview._dataUrl) ? photoPreview._dataUrl : "";
+    var clientName = (typeof getClientName === "function" ? getClientName() : "") || phone;
 
     if (!phone || phone.length < 6) { alert("Enter client phone number"); return; }
     if (!pass || pass.length < 3) { alert("Enter a password (min 3 chars)"); return; }
     if (!renew) { alert("Enter a renew / approve code"); return; }
 
     closeExportModal();
+
+    try {
+      if (window._eliteSubsUpsert) {
+        window._eliteSubsUpsert({
+          name: clientName,
+          phone: phone,
+          pass: pass,
+          expiry: expiry,
+          renew: renew,
+          photo: photoData || "",
+          lastSeen: new Date().toISOString(),
+          notes: "Website client"
+        });
+      }
+      // Publish list for client portal (same browser / device storage)
+      try {
+        var pubKey = "elite_published_clients_v1";
+        var list = [];
+        try { list = JSON.parse(localStorage.getItem(pubKey) || "[]") || []; } catch (e) {}
+        if (!Array.isArray(list)) list = [];
+        var found = false;
+        for (var i = 0; i < list.length; i++) {
+          if ((list[i].phone || "").replace(/\s+/g, "") === phone) {
+            list[i] = { name: clientName, phone: phone, pass: pass, expiry: expiry, renew: renew, photo: photoData || list[i].photo || "" };
+            found = true;
+            break;
+          }
+        }
+        if (!found) list.push({ name: clientName, phone: phone, pass: pass, expiry: expiry, renew: renew, photo: photoData || "" });
+        localStorage.setItem(pubKey, JSON.stringify(list));
+      } catch (e) {}
+
+      var portalLink = location.origin + location.pathname + location.search + "#client";
+      toast("Client saved to website", 4000);
+      alert("Client added to your website!\n\nPhone: " + phone + "\nPassword: " + pass + "\nExpiry: " + expiry + "\n\nClient link:\n" + portalLink + "\n\nSend this link to the client.\nThey open it → enter phone + password → see the plan.");
+      return;
+    } catch (err) {
+      alert("Failed: " + (err.message || err));
+      return;
+    }
+
+    /* legacy HTML export kept below but unreachable */
     setBusy(true);
     toast("Building locked client file...");
 
@@ -1280,10 +1470,14 @@ Error generating stack: `+o.message+`
 
   function bind() {
     var map = {
-      "btn-save-pdf": saveAsPdf,
-      "btn-save-img": saveAsImage,
       "btn-save-html": openExportModal,
-      "btn-print": function () { window.print(); },
+      "btn-subs-active": function () {
+        if (window._eliteOpenSubs) window._eliteOpenSubs("active");
+      },
+      "btn-subs-expired": function () {
+        if (window._eliteOpenSubs) window._eliteOpenSubs("expired");
+      },
+      "btn-logout": coachLogout,
       "ex-cancel": closeExportModal,
       "ex-go": saveAsHtmlLocked
     };
@@ -1549,7 +1743,7 @@ Error generating stack: `+o.message+`
     }
     if (!list.length) {
       box.innerHTML = '<div class="subs-empty">' +
-        (all.length ? "No results in this filter." : "No subscribers yet.<br>Export an HTML Client file or add one manually.") +
+        (all.length ? "No results in this filter." : "No subscribers yet.<br>Use Add Client or add one manually.") +
         '</div>';
       return;
     }
@@ -1601,6 +1795,7 @@ Error generating stack: `+o.message+`
     p.classList.add("open");
     document.body.classList.add("subs-open");
   }
+  window._eliteOpenSubs = openPanel;
   function closePanel() {
     var p = document.getElementById("subs-panel");
     if (p) p.classList.remove("open");
@@ -1859,6 +2054,172 @@ Error generating stack: `+o.message+`
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
   else boot();
   window.addEventListener("load", function () { setTimeout(boot, 200); });
+})();
+</script>
+
+<script>
+/* ========== CLIENT PORTAL (website page, no HTML file) ========== */
+(function () {
+  var PUB = "elite_published_clients_v1";
+  var SUBS = "elite_coach_subs_v1";
+  var OK = "elite_client_ok_v1";
+
+  function loadClients() {
+    var map = {};
+    function add(arr) {
+      if (!Array.isArray(arr)) return;
+      arr.forEach(function (c) {
+        if (!c || !c.phone) return;
+        var ph = String(c.phone).replace(/\s+/g, "");
+        map[ph] = {
+          name: c.name || ph,
+          phone: ph,
+          pass: c.pass || "",
+          expiry: c.expiry || "",
+          renew: c.renew || "",
+          photo: c.photo || ""
+        };
+      });
+    }
+    try { add(JSON.parse(localStorage.getItem(PUB) || "[]")); } catch (e) {}
+    try { add(JSON.parse(localStorage.getItem(SUBS) || "[]")); } catch (e) {}
+    return map;
+  }
+
+  function daysLeft(exp) {
+    if (!exp) return 999;
+    var a = new Date(new Date().toISOString().slice(0, 10) + "T00:00:00");
+    var b = new Date(exp + "T00:00:00");
+    return Math.ceil((b - a) / 86400000);
+  }
+
+  function lockClientUI() {
+    document.querySelectorAll("#root [contenteditable]").forEach(function (el) {
+      el.removeAttribute("contenteditable");
+      el.style.outline = "none";
+      el.style.cursor = "default";
+      el.style.userSelect = "none";
+    });
+    document.querySelectorAll("#root input").forEach(function (inp) {
+      inp.readOnly = true;
+      inp.style.pointerEvents = "none";
+    });
+    document.querySelectorAll("#coach-dock, #save-toolbar, #subs-panel, #export-modal").forEach(function (el) {
+      if (el) el.style.display = "none";
+    });
+  }
+
+  function showClientContent(c) {
+    document.body.classList.add("client-mode", "client-unlocked");
+    document.body.classList.remove("coach-locked");
+    var gate = document.getElementById("client-portal-gate");
+    if (gate) gate.style.display = "none";
+    var left = document.getElementById("cp-bar-left");
+    var right = document.getElementById("cp-bar-right");
+    var d = daysLeft(c.expiry);
+    if (left) left.textContent = (c.name || c.phone || "Client");
+    if (right) {
+      right.className = d < 5 ? "bad" : "ok";
+      right.textContent = d < 0 ? ("EXPIRED · " + c.expiry) : (d + " days left · " + (c.expiry || ""));
+    }
+    lockClientUI();
+    try { sessionStorage.setItem(OK, JSON.stringify({ phone: c.phone, ts: Date.now() })); } catch (e) {}
+  }
+
+  function tryClientLogin() {
+    var phone = (document.getElementById("cp-phone").value || "").replace(/\s+/g, "").trim();
+    var pass = (document.getElementById("cp-pass").value || "").trim();
+    var err = document.getElementById("cp-err");
+    var clients = loadClients();
+    var c = clients[phone];
+    if (!c || c.pass !== pass) {
+      if (err) err.textContent = "Wrong phone or password";
+      return;
+    }
+    if (daysLeft(c.expiry) < 0) {
+      if (err) err.textContent = "Subscription expired on " + c.expiry + ". Contact your coach.";
+      return;
+    }
+    if (err) err.textContent = "";
+    showClientContent(c);
+  }
+
+  function openClientPortal() {
+    try { sessionStorage.setItem("elite_mode", "client"); } catch (e) {}
+    location.hash = "client";
+    document.body.classList.add("client-mode");
+    document.body.classList.remove("client-unlocked", "coach-unlocked", "coach-locked");
+    var cg = document.getElementById("coach-gate");
+    if (cg) cg.style.display = "none";
+    var gate = document.getElementById("client-portal-gate");
+    if (gate) gate.style.display = "flex";
+    var root = document.getElementById("root");
+    if (root) { root.style.visibility = "hidden"; }
+  }
+
+  function openCoachLogin() {
+    try { sessionStorage.removeItem("elite_mode"); sessionStorage.removeItem(OK); } catch (e) {}
+    location.hash = "";
+    location.reload();
+  }
+
+  function boot() {
+    var btnPortal = document.getElementById("btn-client-portal");
+    if (btnPortal && !btnPortal._cp) {
+      btnPortal.addEventListener("click", function (e) {
+        e.preventDefault();
+        openClientPortal();
+      });
+      btnPortal._cp = true;
+    }
+    var loginBtn = document.getElementById("cp-login");
+    if (loginBtn && !loginBtn._cp) {
+      loginBtn.addEventListener("click", tryClientLogin);
+      loginBtn._cp = true;
+    }
+    var pw = document.getElementById("cp-pass");
+    if (pw && !pw._cp) {
+      pw.addEventListener("keydown", function (e) { if (e.key === "Enter") tryClientLogin(); });
+      pw._cp = true;
+    }
+    var toCoach = document.getElementById("cp-to-coach");
+    if (toCoach && !toCoach._cp) {
+      toCoach.addEventListener("click", function (e) {
+        e.preventDefault();
+        openCoachLogin();
+      });
+      toCoach._cp = true;
+    }
+
+    var clientMode = location.hash === "#client" || /[?&]mode=client/.test(location.search);
+    try { if (sessionStorage.getItem("elite_mode") === "client") clientMode = true; } catch (e) {}
+
+    if (clientMode) {
+      document.body.classList.add("client-mode");
+      var cg = document.getElementById("coach-gate");
+      if (cg) cg.style.display = "none";
+      try {
+        var raw = sessionStorage.getItem(OK);
+        if (raw) {
+          var ok = JSON.parse(raw);
+          var clients = loadClients();
+          var c = clients[ok.phone];
+          if (c && daysLeft(c.expiry) >= 0) {
+            showClientContent(c);
+            return;
+          }
+        }
+      } catch (e) {}
+      var gate = document.getElementById("client-portal-gate");
+      if (gate) gate.style.display = "flex";
+    }
+  }
+
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
+  else boot();
+  window.addEventListener("hashchange", function () {
+    if (location.hash === "#client") openClientPortal();
+  });
 })();
 </script>
 
